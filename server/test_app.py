@@ -90,6 +90,63 @@ class TestApp(unittest.TestCase):
         self.assertTrue(isinstance(data, list))
         self.assertEqual(len(data), 1)
         self.assertEqual(set(data[0].keys()), {'id', 'name', 'breed'})
+        @patch('app.db.session.query')
+        def test_get_breeds_success(self, mock_query):
+            """Test successful retrieval of multiple breeds"""
+            # Arrange
+            breed1 = MagicMock()
+            breed1.id = 1
+            breed1.name = "Labrador"
+            breed2 = MagicMock()
+            breed2.id = 2
+            breed2.name = "German Shepherd"
+            mock_query.return_value.all.return_value = [breed1, breed2]
+
+            # Act
+            response = self.app.get('/api/breeds')
+
+            # Assert
+            self.assertEqual(response.status_code, 200)
+            data = json.loads(response.data)
+            self.assertEqual(len(data), 2)
+            self.assertEqual(data[0]['id'], 1)
+            self.assertEqual(data[0]['name'], "Labrador")
+            self.assertEqual(data[1]['id'], 2)
+            self.assertEqual(data[1]['name'], "German Shepherd")
+            mock_query.assert_called_once_with(MagicMock())
+
+        @patch('app.db.session.query')
+        def test_get_breeds_empty(self, mock_query):
+            """Test retrieval when no breeds are available"""
+            # Arrange
+            mock_query.return_value.all.return_value = []
+
+            # Act
+            response = self.app.get('/api/breeds')
+
+            # Assert
+            self.assertEqual(response.status_code, 200)
+            data = json.loads(response.data)
+            self.assertEqual(data, [])
+
+        @patch('app.db.session.query')
+        def test_get_breeds_structure(self, mock_query):
+            """Test the response structure for a single breed"""
+            # Arrange
+            breed = MagicMock()
+            breed.id = 1
+            breed.name = "Labrador"
+            mock_query.return_value.all.return_value = [breed]
+
+            # Act
+            response = self.app.get('/api/breeds')
+
+            # Assert
+            data = json.loads(response.data)
+            self.assertTrue(isinstance(data, list))
+            self.assertEqual(len(data), 1)
+            self.assertEqual(set(data[0].keys()), {'id', 'name'})
+
 
 
 if __name__ == '__main__':

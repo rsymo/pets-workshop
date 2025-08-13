@@ -65,7 +65,12 @@ def get_dog(id: int) -> tuple[Response, int] | Response:
     
     return jsonify(dog)
 
-## HERE
+# Route to get all breeds
+@app.route('/api/breeds', methods=['GET'])
+def get_breeds() -> Response:
+    breeds_query = db.session.query(Breed).all()
+    breeds_list = [{'id': breed.id, 'name': breed.name} for breed in breeds_query]
+    return jsonify(breeds_list)
 
 if __name__ == '__main__':
-    app.run(debug=True, port=5100) # Port 5100 to avoid macOS conflicts
+    app.run(debug=True, port=5100, host='0.0.0.0') # Listen on all interfaces for Codespaces compatibility - port 5100 to avoid macOS conflicts
