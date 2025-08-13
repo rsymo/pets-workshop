@@ -1,152 +1,111 @@
 import unittest
 from unittest.mock import patch, MagicMock
 import json
-from app import app  # Changed from relative import to absolute import
+from app import app
 
-# filepath: server/test_app.py - update to run the tests
+
 class TestApp(unittest.TestCase):
     def setUp(self):
-        # Create a test client using Flask's test client
-        self.app = app.test_client()
-        self.app.testing = True
-        # Turn off database initialization for tests
+        self.client = app.test_client()
         app.config['TESTING'] = True
-        
-    def _create_mock_dog(self, dog_id, name, breed):
-        """Helper method to create a mock dog with standard attributes"""
-        dog = MagicMock(spec=['to_dict', 'id', 'name', 'breed'])
-        dog.id = dog_id
-        dog.name = name
-        dog.breed = breed
-        dog.to_dict.return_value = {'id': dog_id, 'name': name, 'breed': breed}
-        return dog
-        
-    def _setup_query_mock(self, mock_query, dogs):
-        """Helper method to configure the query mock"""
-        mock_query_instance = MagicMock()
-        mock_query.return_value = mock_query_instance
-        mock_query_instance.join.return_value = mock_query_instance
-        mock_query_instance.all.return_value = dogs
-        return mock_query_instance
+
+    def _mock_row(self, id: int, name: str, breed: str):
+        row = MagicMock()
+        row.id = id
+        row.name = name
+        row.breed = breed
+        return row
+
+    def _setup_query_chain(self, mock_query, results):
+        chain = MagicMock()
+        mock_query.return_value = chain
+        chain.join.return_value = chain
+        chain.filter.return_value = chain
+        chain.all.return_value = results
+        return chain
 
     @patch('app.db.session.query')
     def test_get_dogs_success(self, mock_query):
-        """Test successful retrieval of multiple dogs"""
-        # Arrange
-        dog1 = self._create_mock_dog(1, "Buddy", "Labrador")
-        dog2 = self._create_mock_dog(2, "Max", "German Shepherd")
-        mock_dogs = [dog1, dog2]
-        
-        self._setup_query_mock(mock_query, mock_dogs)
-        
-        # Act
-        response = self.app.get('/api/dogs')
-        
-        # Assert
-        self.assertEqual(response.status_code, 200)
-        
-        data = json.loads(response.data)
+        rows = [self._mock_row(1, 'Buddy', 'Labrador'), self._mock_row(2, 'Max', 'German Shepherd')]
+        self._setup_query_chain(mock_query, rows)
+        resp = self.client.get('/api/dogs')
+        self.assertEqual(resp.status_code, 200)
+        data = json.loads(resp.data)
         self.assertEqual(len(data), 2)
-        
-        # Verify first dog
-        self.assertEqual(data[0]['id'], 1)
-        self.assertEqual(data[0]['name'], "Buddy")
-        self.assertEqual(data[0]['breed'], "Labrador")
-        
-        # Verify second dog
-        self.assertEqual(data[1]['id'], 2)
-        self.assertEqual(data[1]['name'], "Max")
-        self.assertEqual(data[1]['breed'], "German Shepherd")
-        
-        # Verify query was called
-        mock_query.assert_called_once()
-        
+        self.assertEqual(data[0], {'id': 1, 'name': 'Buddy', 'breed': 'Labrador'})
+        self.assertEqual(data[1], {'id': 2, 'name': 'Max', 'breed': 'German Shepherd'})
+
     @patch('app.db.session.query')
     def test_get_dogs_empty(self, mock_query):
-        """Test retrieval when no dogs are available"""
-        # Arrange
-        self._setup_query_mock(mock_query, [])
-        
-        # Act
-        response = self.app.get('/api/dogs')
-        
-        # Assert
-        self.assertEqual(response.status_code, 200)
-        data = json.loads(response.data)
+        self._setup_query_chain(mock_query, [])
+        resp = self.client.get('/api/dogs')
+        self.assertEqual(resp.status_code, 200)
+        data = json.loads(resp.data)
         self.assertEqual(data, [])
-        
+
     @patch('app.db.session.query')
     def test_get_dogs_structure(self, mock_query):
-        """Test the response structure for a single dog"""
-        # Arrange
-        dog = self._create_mock_dog(1, "Buddy", "Labrador")
-        self._setup_query_mock(mock_query, [dog])
-        
-        # Act
-        response = self.app.get('/api/dogs')
-        
-        # Assert
-        data = json.loads(response.data)
+        rows = [self._mock_row(1, 'Buddy', 'Labrador')]
+        self._setup_query_chain(mock_query, rows)
+        resp = self.client.get('/api/dogs')
+        data = json.loads(resp.data)
         self.assertTrue(isinstance(data, list))
         self.assertEqual(len(data), 1)
         self.assertEqual(set(data[0].keys()), {'id', 'name', 'breed'})
-        @patch('app.db.session.query')
-        def test_get_breeds_success(self, mock_query):
-            """Test successful retrieval of multiple breeds"""
-            # Arrange
-            breed1 = MagicMock()
-            breed1.id = 1
-            breed1.name = "Labrador"
-            breed2 = MagicMock()
-            breed2.id = 2
-            breed2.name = "German Shepherd"
-            mock_query.return_value.all.return_value = [breed1, breed2]
 
-            # Act
-            response = self.app.get('/api/breeds')
+    @patch('app.db.session.query')
+    def test_get_dogs_filter_by_breed_id(self, mock_query):
+        rows = [self._mock_row(1, 'Buddy', 'Labrador')]
+        chain = self._setup_query_chain(mock_query, rows)
+        resp = self.client.get('/api/dogs?breedId=1')
+        self.assertEqual(resp.status_code, 200)
+        chain.filter.assert_called()
 
-            # Assert
-            self.assertEqual(response.status_code, 200)
-            data = json.loads(response.data)
-            self.assertEqual(len(data), 2)
-            self.assertEqual(data[0]['id'], 1)
-            self.assertEqual(data[0]['name'], "Labrador")
-            self.assertEqual(data[1]['id'], 2)
-            self.assertEqual(data[1]['name'], "German Shepherd")
-            mock_query.assert_called_once_with(MagicMock())
+    @patch('app.db.session.query')
+    def test_get_dogs_filter_by_breed_name(self, mock_query):
+        rows = [self._mock_row(1, 'Buddy', 'Labrador')]
+        chain = self._setup_query_chain(mock_query, rows)
+        resp = self.client.get('/api/dogs?breed=Labrador')
+        self.assertEqual(resp.status_code, 200)
+        chain.filter.assert_called()
 
-        @patch('app.db.session.query')
-        def test_get_breeds_empty(self, mock_query):
-            """Test retrieval when no breeds are available"""
-            # Arrange
-            mock_query.return_value.all.return_value = []
+    @patch('app.db.session.query')
+    def test_get_dogs_available_only(self, mock_query):
+        rows = [self._mock_row(1, 'Buddy', 'Labrador')]
+        chain = self._setup_query_chain(mock_query, rows)
+        resp = self.client.get('/api/dogs?available=true')
+        self.assertEqual(resp.status_code, 200)
+        chain.filter.assert_called()
 
-            # Act
-            response = self.app.get('/api/breeds')
+    @patch('app.db.session.query')
+    def test_get_breeds_success(self, mock_query):
+        breed1 = MagicMock(); breed1.id = 1; breed1.name = 'Labrador'
+        breed2 = MagicMock(); breed2.id = 2; breed2.name = 'German Shepherd'
+        mock_query.return_value.all.return_value = [breed1, breed2]
+        resp = self.client.get('/api/breeds')
+        self.assertEqual(resp.status_code, 200)
+        data = json.loads(resp.data)
+        self.assertEqual(len(data), 2)
+        self.assertEqual(data[0], {'id': 1, 'name': 'Labrador'})
+        self.assertEqual(data[1], {'id': 2, 'name': 'German Shepherd'})
 
-            # Assert
-            self.assertEqual(response.status_code, 200)
-            data = json.loads(response.data)
-            self.assertEqual(data, [])
+    @patch('app.db.session.query')
+    def test_get_breeds_empty(self, mock_query):
+        mock_query.return_value.all.return_value = []
+        resp = self.client.get('/api/breeds')
+        self.assertEqual(resp.status_code, 200)
+        data = json.loads(resp.data)
+        self.assertEqual(data, [])
 
-        @patch('app.db.session.query')
-        def test_get_breeds_structure(self, mock_query):
-            """Test the response structure for a single breed"""
-            # Arrange
-            breed = MagicMock()
-            breed.id = 1
-            breed.name = "Labrador"
-            mock_query.return_value.all.return_value = [breed]
-
-            # Act
-            response = self.app.get('/api/breeds')
-
-            # Assert
-            data = json.loads(response.data)
-            self.assertTrue(isinstance(data, list))
-            self.assertEqual(len(data), 1)
-            self.assertEqual(set(data[0].keys()), {'id', 'name'})
-
+    @patch('app.db.session.query')
+    def test_get_breeds_structure(self, mock_query):
+        breed = MagicMock(); breed.id = 1; breed.name = 'Labrador'
+        mock_query.return_value.all.return_value = [breed]
+        resp = self.client.get('/api/breeds')
+        data = json.loads(resp.data)
+        self.assertTrue(isinstance(data, list))
+        self.assertEqual(len(data), 1)
+        self.assertEqual(set(data[0].keys()), {'id', 'name'})
 
 
 if __name__ == '__main__':

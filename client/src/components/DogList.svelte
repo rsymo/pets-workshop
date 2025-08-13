@@ -10,11 +10,18 @@
     export let dogs: Dog[] = [];
     let loading = true;
     let error: string | null = null;
+    let breeds: { id: number; name: string }[] = [];
+    let selectedBreedId: string = '';
+    let availableOnly: boolean = false;
 
     const fetchDogs = async () => {
         loading = true;
         try {
-            const response = await fetch('/api/dogs');
+            const params = new URLSearchParams();
+            if (selectedBreedId) params.set('breedId', selectedBreedId);
+            if (availableOnly) params.set('available', 'true');
+            const qs = params.toString();
+            const response = await fetch(`/api/dogs${qs ? `?${qs}` : ''}`);
             if(response.ok) {
                 dogs = await response.json();
             } else {
@@ -27,13 +34,43 @@
         }
     };
 
+    const fetchBreeds = async () => {
+        try {
+            const response = await fetch('/api/breeds');
+            if (response.ok) {
+                breeds = await response.json();
+            }
+        } catch (err) {
+            // ignore for now
+        }
+    }
+
     onMount(() => {
+        fetchBreeds();
         fetchDogs();
     });
+
+    // Auto refresh when filters change
+    $: selectedBreedId, availableOnly, fetchDogs();
 </script>
 
 <div>
     <h2 class="text-2xl font-medium mb-6 text-slate-100">Available Dogs</h2>
+    <div class="flex gap-4 items-center mb-6">
+        <div>
+            <label class="block text-slate-300 text-sm mb-1" for="breed">Breed</label>
+            <select id="breed" bind:value={selectedBreedId} class="bg-slate-800 border border-slate-700 text-slate-200 rounded px-3 py-2">
+                <option value="">All breeds</option>
+                {#each breeds as b}
+                    <option value={b.id}>{b.name}</option>
+                {/each}
+            </select>
+        </div>
+        <label class="inline-flex items-center gap-2 text-slate-300 mt-6">
+            <input type="checkbox" bind:checked={availableOnly} class="accent-blue-500" />
+            Only show available
+        </label>
+    </div>
     
     {#if loading}
         <!-- loading animation -->
