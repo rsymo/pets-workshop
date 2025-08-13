@@ -3,7 +3,7 @@ from unittest.mock import patch, MagicMock
 import json
 from app import app  # Changed from relative import to absolute import
 
-# filepath: server/test_app.py
+# filepath: server/test_app.py - update to run the tests
 class TestApp(unittest.TestCase):
     def setUp(self):
         # Create a test client using Flask's test client
